@@ -1,0 +1,473 @@
+---
+title: "PEC3 TFM UOC"
+author: "Esteban Hernández Maldonado"
+date: "22 de abril de 2021"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 4
+  pdf_document:
+    toc: yes
+    toc_depth: 4
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# PEC 3.
+
+## 1. Fase exploratoria
+### 1.1 Lectura y preparación de los datos
+
+El fichero de datos contiente 145 variables. Muchas de ellas se pueden omitir porque son las respuestas a cada de una de las preguntas de tres cuestionarios diferentes y en este estudio se utilizarán sólo las puntuaciones estandarizadas del cuestionario DMSES completo y el de cada uno de su cuatro apartados.
+
+También se descartarán las variables que son la categorización de otras variables del fichero. Si alguna categorización o agrupación de valores fuera necesaria se creará en su debido momento.
+
+Por otra lado se crearán variables nuevas:
+
+- BMI: la variable continua BMI puede estar más relacionada con la diabetes que no las variables peso y altura (estas dos variables se descartarán una vez se haya calculado el BMI). 
+- sobrepeso: la variable categórica sobrepeso (1:Sí, 0:No) se calculará a partir del BMI (BMI>25: sobrepeso)
+- obesidad: la variable categórica obesidad (1:Sí, 0:No) se calculará a partir del BMI (BMI>30: obesidad)
+- alerta: la variable categórica alerta (1:Sí, 0:No) se calculará a partir de la variable hba1c (hba1c>7%). Se considera que un valor de hba1c > 7% indica que la diabetes no está siendo bien contralado por el paciente.
+
+#### 1.1.1 Lectura y creación de variables derivadas
+```{r lectura,warning=FALSE,message=FALSE}
+library(dplyr)
+library(ggplot2)
+library(mgcv)
+library(gnm)
+library(GGally)
+library(gmodels)
+library(Hmisc)
+library(caret)
+library(ROCR)
+
+setwd("C:/Users/ehm24/Documents/master/TFM")
+
+datos.raw <- read.csv("./datos/MontiFinal.csv")
+
+# eliminamos las preguntas de los cuestionarios, categorizaciones de variables y
+# otras variables no relevantes para el estudio
+datos <- datos.raw[,-c(1,2,15,22,26:84,113:131,137:142,144:145)]
+
+# definimos los factores
+
+# Patient identifier
+datos$id.code <- as.factor(datos$id.code)
+# Hospital identifier
+datos$hospid <- factor(datos$hospid,levels=c(1,2,3,4),
+                       labels=c("phupaman","srinakarin","wegaronrat","chula")) 
+# Sex
+datos$gender <- factor(datos$gender,levels=c(1,2),
+                       labels=c("Hombre","Mujer"))                             
+# Marital status
+datos$mstatus <- factor(datos$mstatus,levels=c(1,2,3,4,5),
+                        labels=c("Soltero","´Casado",
+                                 "Viudo","Divorciado","Separado"))             
+# Education level
+datos$edu <- factor(datos$edu,
+                    levels=c(1,2,3,4,5,6),
+                    labels=c("Sin estudios" , "Primarios", "Secundarios",  
+                             "Grado", "Master", "Grado Superior"))             
+# Religion
+datos$religion <- factor(datos$religion,levels=c(1,2,3,4),
+                         labels=c("Budismo", "Islam", "Cristianismo","Otra religión"))                             
+# Income
+datos$income <- factor(datos$income, levels=c(1,2,3,4,5,6), 
+                       labels=c("menos de 4,999 bath", "5,000-9,999  bath", 
+                                "10,000-14,999 bath", "15,000-19,999 bath", 
+                                "20,000-24,999 bath", "más de 25,000 bath"))
+# Family history of T2DM
+datos$famhx <- factor(datos$famhx,levels=c(0,1),labels=c("No", "Sí"))           
+# Comorbid disease
+datos$comob <- factor(datos$comob,levels=c(0,1),labels=c("No", "Sí"))           
+# Comorbidity lipidemia
+datos$comlip <- factor(datos$comlip,levels=c(0,1),labels=c("No", "Sí"))         
+# Comorbidity hypertension
+datos$comht <- factor(datos$comht,levels=c(0,1),labels=c("No", "Sí"))           
+# Comorbidity coronary heart disease
+datos$comchd <- factor(datos$comchd,levels=c(0,1),labels=c("No", "Sí"))          
+# Comorbidity kidney disease
+datos$comkid <- factor(datos$comkid,levels=c(0,1),labels=c("No", "Sí"))         
+# Other comorbidity
+datos$comoth <- factor(datos$comoth,levels=c(0,1),labels=c("No", "Sí"))         
+# Type of Treatment of DM 
+datos$dmrx <- factor(datos$dmrx,
+                     levels=c(1,2,3,4),
+                     labels=c("Sin medicación","Hipoglicémico oral",
+                              "Insulina","Ambos"))   
+# Smoking
+datos$smk <- factor(datos$smk,levels=c(1,2,3),
+                    labels=c("Sí","Exfumador","No"))                            
+# Alcohol
+datos$alcohol <- factor(datos$alcohol,levels=c(1,2,3),
+                        labels=c("Sí","Exbebedor","No"))                        
+# Diabetes Complication 
+datos$compli <- factor(datos$compli,levels=c(0,1),labels=c("No", "Sí"))         
+# Cerebrovascular Accident
+datos$cva <- factor(datos$cva,levels=c(0,1),labels=c("No", "Sí"))               
+# Cerebral Infraction
+datos$cereinfrac <- factor(datos$cereinfrac,levels=c(0,1),labels=c("No", "Sí")) 
+# Ischemic Stroke
+datos$ishemic <- factor(datos$ishemic,levels=c(0,1),labels=c("No", "Sí"))       
+# Stroke, Not specify
+datos$stroke <- factor(datos$stroke,levels=c(0,1),labels=c("No", "Sí"))         
+# Cerebral Hemorrhage
+datos$cerebhem <- factor(datos$cerebhem,levels=c(0,1),labels=c("No", "Sí"))     
+# Transient Ischemic Attack
+datos$tia <- factor(datos$tia,levels=c(0,1),labels=c("No", "Sí"))               
+# Angina pectoris
+datos$angia <- factor(datos$angia,levels=c(0,1),labels=c("No", "Sí"))           
+# Congestive Heart Failure
+datos$chf <- factor(datos$chf,levels=c(0,1),labels=c("No", "Sí"))               
+# Myocardial Infraction
+datos$mi <- factor(datos$mi,levels=c(0,1),labels=c("No", "Sí"))                 
+# Coronary Revascularization
+datos$cororevas <- factor(datos$cororevas,levels=c(0,1),labels=c("No", "Sí"))   
+# Peripheral Arterial Disease
+datos$pad <- factor(datos$pad,levels=c(0,1),labels=c("No", "Sí"))               
+# Neuropathy
+datos$neuropath <- factor(datos$neuropath,levels=c(0,1),labels=c("No", "Sí"))   
+# Renal Insufficiency
+datos$renal <- factor(datos$renal,levels=c(0,1),labels=c("No", "Sí"))           
+# Diabetes Nephropathy
+datos$dn <- factor(datos$dn,levels=c(0,1),labels=c("No", "Sí"))                 
+# Diabetes Retinopathy
+datos$dr <- factor(datos$dr,levels=c(0,1),labels=c("No", "Sí"))                 
+# Other complication
+datos$othcomp <- factor(datos$othcomp,levels=c(0,1),labels=c("No", "Sí"))       
+
+
+# creación de variables derivadas
+
+# alerta: 1-Sí si hba1c > 7% (diabetes no controlada)
+datos$alerta <- factor(ifelse(datos$hba1c > 7,1,0),
+                       levels=c(0,1),
+                       labels=c("No", "Sí"))
+# BMI
+datos$bmi <- datos$weight/(datos$height/100)**2
+# sobrepeso, BMI >25
+datos$sobrepeso <- factor(ifelse(datos$bmi > 25,1,0),
+                          levels=c(0,1),labels=c("No", "Sí"))
+# obesidad, BMI > 30
+datos$obesidad <- factor(ifelse(datos$bmi > 30,1,0),
+                         levels=c(0,1),labels=c("No", "Sí"))
+
+# transformación a variable tipo date de todas las variables fecha
+# estas variables son útiles para poder determinar que datos tienen 
+# información actualizada
+datos$fecha.hba1c <- as.Date(datos$hba1cdate,"%d/%m/%y")
+datos$fecha.ldl <- as.Date(datos$ldldate,"%d/%m/%y")
+datos$fecha.hdl <- as.Date(datos$hdldate,"%d/%m/%y")
+datos$fecha.trig <- as.Date(datos$trigdate,"%d/%m/%y")
+datos$fecha.bp <- as.Date(datos$bpdate,"%d/%m/%y")
+
+# eliminación de variables no necesarias
+drop.cols <- c("weight","height","hba1cdate","ldldate","hdldate","trigdate","bpdate")
+datos <- datos %>% select(-all_of(drop.cols))
+```
+
+#### 1.1.2 Datos faltantes
+Se tiene sólo datos faltantes en dos variables tipo fecha (fecha.ldl y fecha.bp) y en sólo dos pacientes.
+
+```{r datos_faltantes}
+# datos faltantes
+datos[!complete.cases(datos),]
+```
+#### 1.1.3 Outliers
+
+Las variables continuas son:  
+age   
+dmdura   
+hba1c           
+ldl   
+hdl   
+trig   
+sbp   
+dbp   
+DMSES.Diet   
+DMSES.Monitor   
+DMSES.Physical   
+DMSES.Regimen   
+DMSES.Total   
+DK.10   
+
+
+```{r outliers}
+flag_outliers <- function(x, na.rm = TRUE, ...) {
+  qnt <- quantile(x, probs=c(.25, .75), na.rm = na.rm, ...)
+  H <- 1.5 * IQR(x)
+  y <- x
+  y[x < (qnt[1] - H)] <- NA
+  y[x > (qnt[2] + H)] <- NA
+  z <-is.na(y)
+  return(z)
+}
+
+datos$age_out <- flag_outliers(datos$age)
+datos$dmdura_out <- flag_outliers(datos$dmdura)
+datos$hba1c_out <- flag_outliers(datos$hba1c)         
+datos$ldl_out <- flag_outliers(datos$ldl)
+datos$hdl_out <- flag_outliers(datos$hdl)
+datos$trig_out <- flag_outliers(datos$trig)
+datos$sbp_out <- flag_outliers(datos$sbp)
+datos$dbp_out <- flag_outliers(datos$dbp)
+datos$DMSES.Diet_out <- flag_outliers(datos$DMSES.Diet)
+datos$DMSES.Monitor_out <- flag_outliers(datos$DMSES.Monitor)
+datos$DMSES.Physical_out <- flag_outliers(datos$DMSES.Physical)
+datos$DMSES.Regimen_out <- flag_outliers(datos$DMSES.Regimen)
+datos$DMSES.Total_out <- flag_outliers(datos$DMSES.Total)
+datos$DK.10_out <- flag_outliers(datos$DK.10)
+
+vars <- c("age_out","dmdura_out","hba1c_out","ldl_out","hdl_out","trig_out","sbp_out","dbp_out","DMSES.Diet_out",
+          "DMSES.Monitor_out","DMSES.Physical_out","DMSES.Regimen_out","DMSES.Total_out","DK.10_out")
+
+datos$out <- apply(datos[,vars],1,max)
+
+# pacientes con alguna variable outlier
+pat_out <- datos %>% filter(out==1)
+# pacientes con ninguna variable outlier
+datos <- datos %>% filter(out==0)
+
+dim(pat_out)
+dim(datos)
+
+attach(datos)
+
+
+```
+
+La estructura del fichero inicial, ya con todas las variables derivadas creadas es la que sigue:
+```{r desc,eval= FALSE}
+# descripcion del fichero con el que se trabajará
+str(datos)
+```
+
+### 1.2 Exploración unidimensional
+
+Una primera vista a las variables de nuestro fichero:
+```{r expluni,eval= FALSE}
+summary(datos[,-c(1)])
+
+```
+
+Los únicos valores faltantes se dan en las variables fecha.ldl y fecha.bp, un único caso para cada variable. De momento se decide no eliminar los registros.
+
+## 1.3  Exploración multidimensional
+
+Vemos en que medida están relacionadas las puntuaciones del cuestiorio DMSES entre sí.
+
+```{r explmulti1,eval= FALSE}
+# demostracion DMSES total es la suma de los 4 subscores
+max(DMSES.Total - (DMSES.Diet + DMSES.Monitor + DMSES.Physical + DMSES.Regimen))
+
+# relación entre los diferentes subscores
+ggpairs(datos[,c("DMSES.Diet","DMSES.Monitor","DMSES.Physical","DMSES.Regimen","DMSES.Total")])
+```
+
+
+Al querer buscar las relaciones entre las puntuaciones del cuestionario DMSES (la puntuación total y la de las partes 'dieta', 'monitor', 'régimen' y 'estado físico') y el nivel de hba1c se observa que no hay una relación lineal a priori. Se valorará hacer transformaciones adecuadas para comprobar si se puede hallar una relación.
+
+```{r explmulti2,eval= FALSE}
+par(mfrow=c(2,3))
+pairs(~ hba1c + DMSES.Diet ,data=datos)
+pairs(~ hba1c + DMSES.Monitor,data=datos)
+pairs(~ hba1c + DMSES.Physical,data=datos)
+pairs(~ hba1c + DMSES.Regimen,data=datos)
+pairs(~ hba1c + DMSES.Total,data=datos)
+par(mfrow=c(1,1))
+```
+
+
+Tampoco se detecta una relación clara entre las puntuaciones del cuestionario DMSES y la variable categórica 'alerta'.
+
+```{r explmulti3,eval= FALSE}
+pairs(~ alerta + DMSES.Diet ,data=datos)
+pairs(~ alerta + DMSES.Monitor,data=datos)
+pairs(~ alerta + DMSES.Physical,data=datos)
+pairs(~ alerta + DMSES.Regimen,data=datos)
+pairs(~ alerta + DMSES.Total,data=datos)
+```
+
+
+## 2 Regresión lineal
+
+El objetivo de este apartado será comprobar si la puntuación del test DMSES (total o de alguno de sus apartados) puede predecir el valor de la variable 'hba1c'. 
+
+```{r lm1,eval= FALSE}
+par(mfrow=c(2,2))
+mod <- lm(hba1c ~ DMSES.Total + DK.10 + age + renal + ldl + bmi,data=datos)
+(smod <- summary(mod))
+plot(mod)
+
+# eliminamos DK.10
+mod <- lm(hba1c ~ DMSES.Total +         age + renal + ldl + bmi,data=datos)
+(smod <- summary(mod))
+plot(mod)
+
+# eliminamos BMI
+mod <- lm(hba1c ~ DMSES.Total +         age + renal + ldl      ,data=datos)
+(smod <- summary(mod))
+plot(mod)
+
+par(mfrow=c(1,1))
+```
+
+No se consigue tener un R2 elevado ni corregir la no normalidad de los residuos. Aplicamos logaritmos a 'hba1c' (variable estrictamente positiva) y se mejora un poco la situación en cuanto a normalidad pero el R2 sigue sin subir.  Búsqueda de outliers pendiente.
+
+```{r lm2,eval= FALSE}
+par(mfrow=c(2,2))
+mod <- lm(log(hba1c) ~ DMSES.Total +         age + renal + ldl      ,data=datos)
+(smod <- summary(mod))
+plot(mod)
+par(mfrow=c(1,1))
+```
+
+## 3 Regresión logística
+
+El objetivo de este apartado será comprobar si la puntuación del test DMSES (total o de alguno de sus apartados) puede ayudar a discriminar entre pacientes que controlan la diabetes y los que no.
+
+### 3.1 Preparación de los ficheros para 'train' y 'test'
+
+```{r split,eval= FALSE}
+# cálculo del numero de registros para el training 
+# según la proporción de registros dedicado al training
+pct.train <- 0.90 
+
+n <- nrow(datos)
+n.train <- floor(n*pct.train)
+
+set.seed(123)
+ind.training <- sample(1:n,n.train)
+length(ind.training)
+
+datos.train <- datos[ind.training,]
+datos.test <- datos[-ind.training,]
+
+dim(datos.train)
+dim(datos.test)
+
+```
+
+### 3.2 Modelo DMSES subscore Diet
+
+```{r log_diet,eval= FALSE}
+logdiet <- glm(alerta ~ DMSES.Diet, data = datos.train, family = "binomial")
+summary(logdiet)
+
+predicciones <- predict(logdiet,newdata=datos.test[,-c(1)],type='response')
+predicciones.categ <- ifelse(predicciones > 0.5,1,0)
+predicciones.categ <- factor(predicciones.categ,levels=c(0,1),labels=c("No","Sí"))
+
+# Confusion matrix
+confusionMatrix(data=predicciones.categ, reference=datos.test$alerta)
+
+# ROC and AUC
+pr <- prediction(predicciones, datos.test$alerta)
+# TPR = sensitivity, FPR=specificity
+prf <- performance(pr, measure = "tpr", x.measure = "fpr")
+plot(prf)
+
+auc <- performance(pr, measure = "auc")
+(auc <- auc@y.values[[1]])
+
+#
+#
+# hay mejora si añadimos algunos predictores?
+
+logdiet <- glm(alerta ~ DMSES.Diet + bmi + dmdura + age, data = datos.train, family = "binomial")
+summary(logdiet)
+
+predicciones <- predict(logdiet,newdata=datos.test[,-c(1)],type='response')
+predicciones.categ <- ifelse(predicciones > 0.5,1,0)
+predicciones.categ <- factor(predicciones.categ,levels=c(0,1),labels=c("No","Sí"))
+
+# Confusion matrix
+confusionMatrix(data=predicciones.categ, reference=datos.test$alerta)
+
+# ROC and AUC
+pr <- prediction(predicciones, datos.test$alerta)
+# TPR = sensitivity, FPR=specificity
+prf <- performance(pr, measure = "tpr", x.measure = "fpr")
+plot(prf)
+
+auc <- performance(pr, measure = "auc")
+(auc <- auc@y.values[[1]])
+
+
+```
+
+### 3.3 Modelo DMSES subscore Monitor
+
+```{r log_monitor,eval= FALSE}
+logmonitor <- glm(alerta ~ DMSES.Monitor, data = datos.train, family = "binomial")
+summary(logmonitor)
+
+predicciones <- predict(logmonitor,newdata=datos.test[,-c(1)],type='response')
+predicciones.categ <- ifelse(predicciones > 0.5,1,0)
+predicciones.categ <- factor(predicciones.categ,levels=c(0,1),labels=c("No","Sí"))
+
+# Confusion matrix
+confusionMatrix(data=predicciones.categ, reference=datos.test$alerta)
+
+# ROC and AUC
+pr <- prediction(predicciones, datos.test$alerta)
+# TPR = sensitivity, FPR=specificity
+prf <- performance(pr, measure = "tpr", x.measure = "fpr")
+plot(prf)
+
+auc <- performance(pr, measure = "auc")
+(auc <- auc@y.values[[1]])
+
+```
+
+### 3.4 Modelo DMSES subscore Regimen
+
+```{r log_regimen,eval= FALSE}
+logregimen <- glm(alerta ~ DMSES.Regimen, data = datos.train, family = "binomial")
+summary(logregimen)
+
+predicciones <- predict(logregimen,newdata=datos.test[,-c(1)],type='response')
+predicciones.categ <- ifelse(predicciones > 0.5,1,0)
+predicciones.categ <- factor(predicciones.categ,levels=c(0,1),labels=c("No","Sí"))
+
+# Confusion matrix
+confusionMatrix(data=predicciones.categ, reference=datos.test$alerta)
+
+# ROC and AUC
+pr <- prediction(predicciones, datos.test$alerta)
+# TPR = sensitivity, FPR=specificity
+prf <- performance(pr, measure = "tpr", x.measure = "fpr")
+plot(prf)
+
+auc <- performance(pr, measure = "auc")
+(auc <- auc@y.values[[1]])
+
+```
+
+### 3.5 Modelo DMSES subscore Physical
+
+```{r log_physical,eval= FALSE}
+logphysical <- glm(alerta ~ DMSES.Physical, data = datos.train, family = "binomial")
+summary(logphysical)
+
+predicciones <- predict(logphysical,newdata=datos.test[,-c(1)],type='response')
+predicciones.categ <- ifelse(predicciones > 0.5,1,0)
+predicciones.categ <- factor(predicciones.categ,levels=c(0,1),labels=c("No","Sí"))
+
+# Confusion matrix
+confusionMatrix(data=predicciones.categ, reference=datos.test$alerta)
+
+# ROC and AUC
+pr <- prediction(predicciones, datos.test$alerta)
+# TPR = sensitivity, FPR=specificity
+prf <- performance(pr, measure = "tpr", x.measure = "fpr")
+plot(prf)
+
+auc <- performance(pr, measure = "auc")
+(auc <- auc@y.values[[1]])
+
+```
+
+
