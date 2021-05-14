@@ -33,6 +33,7 @@ Por otra lado se crearán variables nuevas:
 
 #### 1.1.1 Lectura y creación de variables derivadas
 ```{r lectura,warning=FALSE,message=FALSE}
+library(MASS)
 library(dplyr)
 library(ggplot2)
 library(mgcv)
@@ -42,6 +43,13 @@ library(gmodels)
 library(Hmisc)
 library(caret)
 library(ROCR)
+library(gridExtra)
+library(corrplot)
+library(kableExtra)
+library(faraway)
+library(ggpubr)
+library(klaR)  
+
 
 setwd("C:/Users/ehm24/Documents/master/TFM")
 
@@ -201,7 +209,7 @@ flag_outliers <- function(x, na.rm = TRUE, ...) {
   y <- x
   y[x < (qnt[1] - H)] <- NA
   y[x > (qnt[2] + H)] <- NA
-  z <-is.na(y)
+  z <-as.factor(as.integer(is.na(y)))
   return(z)
 }
 
@@ -219,16 +227,40 @@ datos$DMSES.Physical_out <- flag_outliers(datos$DMSES.Physical)
 datos$DMSES.Regimen_out <- flag_outliers(datos$DMSES.Regimen)
 datos$DMSES.Total_out <- flag_outliers(datos$DMSES.Total)
 datos$DK.10_out <- flag_outliers(datos$DK.10)
+datos$bmi_out <- flag_outliers(datos$bmi)
 
-vars <- c("age_out","dmdura_out","hba1c_out","ldl_out","hdl_out","trig_out","sbp_out","dbp_out","DMSES.Diet_out",
-          "DMSES.Monitor_out","DMSES.Physical_out","DMSES.Regimen_out","DMSES.Total_out","DK.10_out")
+summary(datos)
 
-datos$out <- apply(datos[,vars],1,max)
+# flags para outliers
+vars_out <- c("age_out","dmdura_out","hba1c_out","ldl_out","hdl_out","trig_out","sbp_out","dbp_out",
+              "DMSES.Diet_out","DMSES.Monitor_out","DMSES.Physical_out","DMSES.Regimen_out",
+              "DMSES.Total_out","DK.10_out")
 
-# pacientes con alguna variable outlier
+# la variable datos$out valdrá uno si alguna de las variables continuas es outlier, 0 en caso contrario
+datos$out <- apply(datos[,vars_out],1,max)
+
+
+# variables continuas
+vars_cont <- c("age","dmdura","hba1c","ldl","hdl","trig","sbp","dbp",
+              "DMSES.Diet","DMSES.Monitor","DMSES.Physical","DMSES.Regimen",
+              "DMSES.Total","DK.10")
+
+# variables categóricas
+vars_cat <- c("id.code","hospid","gender","mstatus","edu","religion","income",
+              "famhx","comob","comlip","comht","comchd","comkid","comoth","dmrx",
+              "smk","alcohol","compli","cva","cereinfrac","ishemic","stroke","cerebhem",
+              "tia","angia","chf","mi","cororevas","pad","neuropath","renal","dn",
+              "dr","othcomp","alerta","sobrepeso","obesidad",vars_out,"out")
+
+# otras variables
+vars_otras <- c("fecha.hba1c","fecha.ldl","fecha.hdl","fecha.trig","fecha.bp")
+
+# todas las variables
+vars <- c(vars_cat,vars_cont,vars_otras)
+
+# pacientes con alguna variable continua outlier
 pat_out <- datos %>% filter(out==1)
-# pacientes con ninguna variable outlier
-datos <- datos %>% filter(out==0)
+
 
 dim(pat_out)
 dim(datos)
@@ -239,7 +271,7 @@ attach(datos)
 ```
 
 La estructura del fichero inicial, ya con todas las variables derivadas creadas es la que sigue:
-```{r desc,eval= FALSE}
+```{r desc,eval= TRUE}
 # descripcion del fichero con el que se trabajará
 str(datos)
 ```
@@ -247,18 +279,229 @@ str(datos)
 ### 1.2 Exploración unidimensional
 
 Una primera vista a las variables de nuestro fichero:
-```{r expluni,eval= FALSE}
+```{r expluni_sum,eval= TRUE}
 summary(datos[,-c(1)])
-
 ```
 
 Los únicos valores faltantes se dan en las variables fecha.ldl y fecha.bp, un único caso para cada variable. De momento se decide no eliminar los registros.
 
+Analizamos con un poco más de detalle las variables categóricas
+
+```{r expluni_hist,echo= FALSE, eval= TRUE}
+bar_hospid       <- ggplot(datos,aes(hospid)) + geom_bar()
+bar_gender       <- ggplot(datos,aes(gender)) + geom_bar()      
+bar_mstatus      <- ggplot(datos,aes(mstatus)) + geom_bar()
+bar_edu          <- ggplot(datos,aes(edu)) + geom_bar()
+bar_religion     <- ggplot(datos,aes(religion)) + geom_bar()
+bar_income       <- ggplot(datos,aes(income)) + geom_bar()
+bar_famhx        <- ggplot(datos,aes(famhx)) + geom_bar()
+bar_comob        <- ggplot(datos,aes(comob)) + geom_bar()
+bar_comlip       <- ggplot(datos,aes(comlip)) + geom_bar()
+bar_comht        <- ggplot(datos,aes(comht)) + geom_bar()
+bar_comchd       <- ggplot(datos,aes(comchd)) + geom_bar()
+bar_comkid       <- ggplot(datos,aes(comkid)) + geom_bar()
+bar_comoth       <- ggplot(datos,aes(comoth)) + geom_bar()
+bar_dmrx         <- ggplot(datos,aes(dmrx)) + geom_bar()
+bar_smk          <- ggplot(datos,aes(smk)) + geom_bar()
+bar_alcohol      <- ggplot(datos,aes(alcohol)) + geom_bar()
+bar_compli       <- ggplot(datos,aes(compli)) + geom_bar()
+bar_cva          <- ggplot(datos,aes(cva)) + geom_bar()
+bar_cereinfrac   <- ggplot(datos,aes(cereinfrac)) + geom_bar()
+bar_ishemic      <- ggplot(datos,aes(ishemic)) + geom_bar()
+bar_stroke       <- ggplot(datos,aes(stroke)) + geom_bar()
+bar_cerebhem     <- ggplot(datos,aes(cerebhem)) + geom_bar()
+bar_tia          <- ggplot(datos,aes(tia)) + geom_bar()
+bar_angia        <- ggplot(datos,aes(angia)) + geom_bar()
+bar_chf          <- ggplot(datos,aes(chf)) + geom_bar()
+bar_mi           <- ggplot(datos,aes(mi)) + geom_bar()
+bar_cororevas    <- ggplot(datos,aes(cororevas)) + geom_bar()
+bar_pad          <- ggplot(datos,aes(pad)) + geom_bar()
+bar_neuropath    <- ggplot(datos,aes(neuropath)) + geom_bar()
+bar_renal        <- ggplot(datos,aes(renal)) + geom_bar()
+bar_dn           <- ggplot(datos,aes(dn)) + geom_bar()
+bar_dr           <- ggplot(datos,aes(dr)) + geom_bar()
+bar_othcomp      <- ggplot(datos,aes(othcomp)) + geom_bar()
+bar_alerta       <- ggplot(datos,aes(alerta)) + geom_bar()
+bar_sobrepeso    <- ggplot(datos,aes(sobrepeso)) + geom_bar()
+bar_obesidad     <- ggplot(datos,aes(obesidad)) + geom_bar()
+
+#grid.arrange(bar_hospid,bar_gender,bar_mstatus,bar_edu,bar_religion,bar_income,
+#             bar_famhx,bar_comob,bar_comlip,bar_comht,bar_comchd,bar_comkid,
+#             bar_comoth,bar_dmrx,bar_smk,bar_alcohol,bar_compli,bar_cva,
+#             bar_cereinfrac,bar_ishemic,bar_stroke,bar_cerebhem,bar_tia,bar_angia,
+#             bar_chf,bar_mi,bar_cororevas,bar_pad,bar_neuropath,bar_renal,bar_dn,
+#             bar_dr,bar_othcomp,bar_alerta,bar_sobrepeso,bar_obesidad,ncol=2)
+
+grid.arrange(bar_hospid,bar_gender,bar_mstatus,bar_edu,bar_religion,bar_income,
+             bar_famhx,bar_comob,bar_comlip,bar_comht,bar_comchd,bar_comkid,
+             ncol=2)
+
+grid.arrange(bar_comoth,bar_dmrx,bar_smk,bar_alcohol,bar_compli,bar_cva,
+             bar_cereinfrac,bar_ishemic,bar_stroke,bar_cerebhem,bar_tia,bar_angia,
+             ncol=2)
+
+grid.arrange(bar_chf,bar_mi,bar_cororevas,bar_pad,bar_neuropath,bar_renal,bar_dn,
+             bar_dr,bar_othcomp,bar_alerta,bar_sobrepeso,bar_obesidad,ncol=2)
+```
+
+
+
+Analizamos con un poco más de detalle las variables continuas. 
+
+- Boxplot (con outliers)
+```{r expluni_boxp,eval= TRUE}
+bx_age            <- ggplot(datos,aes(y=age)) + geom_boxplot()
+bx_dmdura         <- ggplot(datos,aes(y=dmdura)) + geom_boxplot()  
+bx_hba1c          <- ggplot(datos,aes(y=hba1c)) + geom_boxplot()         
+bx_ldl            <- ggplot(datos,aes(y=ldl)) + geom_boxplot() 
+bx_hdl            <- ggplot(datos,aes(y=hdl)) + geom_boxplot()
+bx_trig           <- ggplot(datos,aes(y=trig)) + geom_boxplot()
+bx_sbp            <- ggplot(datos,aes(y=sbp)) + geom_boxplot()
+bx_dbp            <- ggplot(datos,aes(y=dbp)) + geom_boxplot()
+bx_DMSES.Diet     <- ggplot(datos,aes(y=DMSES.Diet)) + geom_boxplot()
+bx_DMSES.Monitor  <- ggplot(datos,aes(y=DMSES.Monitor)) + geom_boxplot()
+bx_DMSES.Physical <- ggplot(datos,aes(y=DMSES.Physical)) + geom_boxplot()
+bx_DMSES.Regimen  <- ggplot(datos,aes(y=DMSES.Regimen)) + geom_boxplot()
+bx_DMSES.Total    <- ggplot(datos,aes(y=DMSES.Total)) + geom_boxplot()
+bx_DK.10          <- ggplot(datos,aes(y=DK.10)) + geom_boxplot()
+bx_bmi            <- ggplot(datos,aes(y=bmi)) + geom_boxplot()
+
+grid.arrange(bx_age,bx_dmdura,bx_hba1c,bx_ldl,bx_hdl,bx_trig,bx_sbp,bx_dbp,
+             bx_DMSES.Diet, bx_DMSES.Monitor, bx_DMSES.Physical, bx_DMSES.Regimen,
+             bx_DMSES.Total, bx_DK.10, bx_bmi,ncol=4)
+
+```
+
+
+- Densidades
+```{r expluni_den,eval= TRUE}
+den_age            <- ggplot(datos,aes(x=age)) + geom_density()
+den_dmdura         <- ggplot(datos,aes(x=dmdura)) + geom_density()  
+den_hba1c          <- ggplot(datos,aes(x=hba1c)) + geom_density()         
+den_ldl            <- ggplot(datos,aes(x=ldl)) + geom_density() 
+den_hdl            <- ggplot(datos,aes(x=hdl)) + geom_density()
+den_trig           <- ggplot(datos,aes(x=trig)) + geom_density()
+den_sbp            <- ggplot(datos,aes(x=sbp)) + geom_density()
+den_dbp            <- ggplot(datos,aes(x=dbp)) + geom_density()
+den_DMSES.Diet     <- ggplot(datos,aes(x=DMSES.Diet)) + geom_density()
+den_DMSES.Monitor  <- ggplot(datos,aes(x=DMSES.Monitor)) + geom_density()
+den_DMSES.Physical <- ggplot(datos,aes(x=DMSES.Physical)) + geom_density()
+den_DMSES.Regimen  <- ggplot(datos,aes(x=DMSES.Regimen)) + geom_density()
+den_DMSES.Total    <- ggplot(datos,aes(x=DMSES.Total)) + geom_density()
+den_DK.10          <- ggplot(datos,aes(x=DK.10)) + geom_density()
+den_bmi            <- ggplot(datos,aes(x=bmi)) + geom_density()
+
+grid.arrange(den_age,den_dmdura,den_hba1c,den_ldl,den_hdl,den_trig,den_sbp,den_dbp,
+             den_DMSES.Diet, den_DMSES.Monitor, den_DMSES.Physical, den_DMSES.Regimen,
+             den_DMSES.Total, den_DK.10, den_bmi,ncol=4)
+```
+
+- Normalidad
+
+Ningun predictor sigue una distribución normal según el test de normalidad de Shapiro y según el QQ plot tenemos normalidad en eda, hdl, sbp, dbp, DMSES.Total y DK.10.
+
+
+```{r expluni_norm,eval=TRUE}
+
+shapiro.test(datos$age)
+shapiro.test(datos$dmdura)
+shapiro.test(datos$hba1c)
+shapiro.test(datos$ldl)
+shapiro.test(datos$hdl)
+shapiro.test(datos$trig)
+shapiro.test(datos$sbp)
+shapiro.test(datos$dbp)
+shapiro.test(datos$DMSES.Diet)
+shapiro.test(datos$DMSES.Monitor)
+shapiro.test(datos$DMSES.Physical)
+shapiro.test(datos$DMSES.Regimen)
+shapiro.test(datos$DMSES.Total)
+shapiro.test(datos$DK.10)
+shapiro.test(datos$bmi)
+
+#ggqqplot(datos[,vars_cont],combine = TRUE,facet.by=c(5,3))
+
+qq_age            <- ggqqplot(datos$age)
+qq_dmdura         <- ggqqplot(datos$dmdura)
+qq_hba1c          <- ggqqplot(datos$hba1c)
+qq_ldl            <- ggqqplot(datos$ldl)
+qq_hdl            <- ggqqplot(datos$hdl)
+qq_trig           <- ggqqplot(datos$trig)
+qq_sbp            <- ggqqplot(datos$sbp)
+qq_dbp            <- ggqqplot(datos$dbp)
+qq_DMSES.Diet     <- ggqqplot(datos$DMSES.Diet)
+qq_DMSES.Monitor  <- ggqqplot(datos$DMSES.Monitor)
+qq_DMSES.Physical <- ggqqplot(datos$DMSES.Physical)
+qq_DMSES.Regimen  <- ggqqplot(datos$DMSES.Regimen)
+qq_DMSES.Total    <- ggqqplot(datos$DMSES.Total)
+qq_DK.10          <- ggqqplot(datos$DK.10)
+qq_bmi            <- ggqqplot(datos$bmi)
+
+#Arrange all the plots onto one page
+
+#plot_grid(qq_age, qq_dmdura, qq_hba1c, qq_ldl, qq_hdl, qq_trig,
+#         qq_sbp, qq_dbp, qq_DMSES.Diet, qq_DMSES.Monitor,
+#         qq_DMSES.Physical, qq_DMSES.Regimen, qq_DMSES.Total,
+#         qq_DK.10, qq_bmi, nrow=5,ncol=3)
+
+#grid.arrange(qq_age, qq_dmdura, qq_hba1c, qq_ldl, qq_hdl, qq_trig,
+#             qq_sbp, qq_dbp, qq_DMSES.Diet, qq_DMSES.Monitor,
+#             qq_DMSES.Physical, qq_DMSES.Regimen, qq_DMSES.Total,
+#             qq_DK.10, qq_bmi, ncol=2)
+
+
+grid.arrange(qq_age, qq_dmdura, qq_hba1c, qq_ldl, qq_hdl, qq_trig, ncol=3)
+grid.arrange(qq_sbp, qq_dbp, qq_DMSES.Diet, qq_DMSES.Monitor, 
+             qq_DMSES.Physical, qq_DMSES.Regimen, ncol = 3)
+
+grid.arrange(qq_DMSES.Total,qq_DK.10, qq_bmi, ncol=3)
+
+```
+
+
 ## 1.3  Exploración multidimensional
+
+Los niveles de correlación entre las puntuaciones DMSES y el resto de variables continuas son bajos a excepción de la variable hba1c. La mayor correlación entre hba1c y las puntuaciones DMSES se da con el factor dieta. Se detecta que las diferentes puntuaciones del cuestionario DMSES estan fuertemente relacionas, por lo que se puede considerar tomar sólo una para el análisis. La puntuación total y la de la parte de la dieta son las mejoras candidatas debido a que tienen una correlación más alta con hba1c.
+
+```{r explmulti0,eval= TRUE,cache=TRUE}
+dim(datos[,vars_cont])
+str(datos[,vars_cont])
+M <- cor(datos[,c(vars_cont)])
+knitr::kable(round(M,2))
+
+corrplot(M,method="circle")
+
+# vamos a ordenar las correlaciones
+flattenCorrMatrix <- function(cormat) {
+  ut <- upper.tri(cormat)
+  dd <- data.frame(
+                   row = rownames(cormat)[row(cormat)[ut]],
+                   column = rownames(cormat)[col(cormat)[ut]],
+                   cor  =(cormat)[ut]
+                   )
+  dd <- dd[order(abs(dd$cor), decreasing = T),]
+  dd$cor <- round(dd$cor, 3)
+  dd
+}
+
+flattenCorrMatrix(M)  
+
+
+cor(hba1c,DMSES.Diet)
+cor(hba1c,DMSES.Physical)
+cor(hba1c,DMSES.Monitor)
+cor(hba1c,DMSES.Regimen)
+cor(hba1c,DMSES.Total)
+
+
+```
+
+Podemos ver que las diferentes puntuaciones del cuestionario DMSES (total o de alguna de sus partes) están muy relacionadas. De entre todas las puntuaciones, la del factor dieta es la que mayor correlación tienen con la hba1c, por lo que parece razonable centrarse en el uso de sólo esa puntuación para buscar una relación con la hba1c y descartar el resto de puntuaciones del cuestionario DMSES del análisis. 
+
 
 Vemos en que medida están relacionadas las puntuaciones del cuestiorio DMSES entre sí.
 
-```{r explmulti1,eval= FALSE}
+```{r explmulti1,eval= TRUE,cache=TRUE}
 # demostracion DMSES total es la suma de los 4 subscores
 max(DMSES.Total - (DMSES.Diet + DMSES.Monitor + DMSES.Physical + DMSES.Regimen))
 
@@ -269,7 +512,7 @@ ggpairs(datos[,c("DMSES.Diet","DMSES.Monitor","DMSES.Physical","DMSES.Regimen","
 
 Al querer buscar las relaciones entre las puntuaciones del cuestionario DMSES (la puntuación total y la de las partes 'dieta', 'monitor', 'régimen' y 'estado físico') y el nivel de hba1c se observa que no hay una relación lineal a priori. Se valorará hacer transformaciones adecuadas para comprobar si se puede hallar una relación.
 
-```{r explmulti2,eval= FALSE}
+```{r explmulti2,eval= FALSE,cache=TRUE}
 par(mfrow=c(2,3))
 pairs(~ hba1c + DMSES.Diet ,data=datos)
 pairs(~ hba1c + DMSES.Monitor,data=datos)
@@ -282,7 +525,7 @@ par(mfrow=c(1,1))
 
 Tampoco se detecta una relación clara entre las puntuaciones del cuestionario DMSES y la variable categórica 'alerta'.
 
-```{r explmulti3,eval= FALSE}
+```{r explmulti3,eval= FALSE,cache=TRUE}
 pairs(~ alerta + DMSES.Diet ,data=datos)
 pairs(~ alerta + DMSES.Monitor,data=datos)
 pairs(~ alerta + DMSES.Physical,data=datos)
@@ -291,36 +534,76 @@ pairs(~ alerta + DMSES.Total,data=datos)
 ```
 
 
+Análisis multivariante discreto
+
+Las variables discretas con poca variabilidad no se toman en cuenta (cva, cereinfrac, ishemic, stroke, cerebhem,tia, angia, chf, cororevas, pad, neuropath )
+
+```{r explmulti4,eval= TRUE,cache=TRUE}
+chisq.test(datos$alerta,datos$hospid)
+chisq.test(datos$alerta,datos$gender)
+chisq.test(datos$alerta,datos$mstatus)
+chisq.test(datos$alerta,datos$edu)
+chisq.test(datos$alerta,datos$religion)
+chisq.test(datos$alerta,datos$income)
+chisq.test(datos$alerta,datos$famhx)
+chisq.test(datos$alerta,datos$comob)
+chisq.test(datos$alerta,datos$comlip)
+chisq.test(datos$alerta,datos$comht)
+chisq.test(datos$alerta,datos$comchd)
+chisq.test(datos$alerta,datos$comkid)
+chisq.test(datos$alerta,datos$comoth)
+chisq.test(datos$alerta,datos$dmrx)
+chisq.test(datos$alerta,datos$smk)
+chisq.test(datos$alerta,datos$alcohol)
+chisq.test(datos$alerta,datos$compli)
+chisq.test(datos$alerta,datos$mi)
+chisq.test(datos$alerta,datos$renal)
+chisq.test(datos$alerta,datos$dn)
+chisq.test(datos$alerta,datos$dr)
+chisq.test(datos$alerta,datos$sobrepeso)
+chisq.test(datos$alerta,datos$obesidad)
+
+
+
+
+```
+
+
+
 ## 2 Regresión lineal
 
 El objetivo de este apartado será comprobar si la puntuación del test DMSES (total o de alguno de sus apartados) puede predecir el valor de la variable 'hba1c'. 
 
-```{r lm1,eval= FALSE}
+```{r lm1,eval= TRUE,cache=TRUE}
 par(mfrow=c(2,2))
 mod <- lm(hba1c ~ DMSES.Total + DK.10 + age + renal + ldl + bmi,data=datos)
 (smod <- summary(mod))
 plot(mod)
+vif(mod)
 
 # eliminamos DK.10
 mod <- lm(hba1c ~ DMSES.Total +         age + renal + ldl + bmi,data=datos)
 (smod <- summary(mod))
 plot(mod)
+vif(mod)
 
 # eliminamos BMI
 mod <- lm(hba1c ~ DMSES.Total +         age + renal + ldl      ,data=datos)
 (smod <- summary(mod))
 plot(mod)
+vif(mod)
 
 par(mfrow=c(1,1))
 ```
 
 No se consigue tener un R2 elevado ni corregir la no normalidad de los residuos. Aplicamos logaritmos a 'hba1c' (variable estrictamente positiva) y se mejora un poco la situación en cuanto a normalidad pero el R2 sigue sin subir.  Búsqueda de outliers pendiente.
 
-```{r lm2,eval= FALSE}
+```{r lm2,eval= TRUE,cache=TRUE}
 par(mfrow=c(2,2))
 mod <- lm(log(hba1c) ~ DMSES.Total +         age + renal + ldl      ,data=datos)
 (smod <- summary(mod))
 plot(mod)
+vif(mod)
 par(mfrow=c(1,1))
 ```
 
@@ -330,7 +613,7 @@ El objetivo de este apartado será comprobar si la puntuación del test DMSES (t
 
 ### 3.1 Preparación de los ficheros para 'train' y 'test'
 
-```{r split,eval= FALSE}
+```{r split,eval= TRUE,cache=TRUE}
 # cálculo del numero de registros para el training 
 # según la proporción de registros dedicado al training
 pct.train <- 0.90 
@@ -352,7 +635,7 @@ dim(datos.test)
 
 ### 3.2 Modelo DMSES subscore Diet
 
-```{r log_diet,eval= FALSE}
+```{r log_diet,eval= TRUE,cache=TRUE}
 logdiet <- glm(alerta ~ DMSES.Diet, data = datos.train, family = "binomial")
 summary(logdiet)
 
@@ -400,7 +683,7 @@ auc <- performance(pr, measure = "auc")
 
 ### 3.3 Modelo DMSES subscore Monitor
 
-```{r log_monitor,eval= FALSE}
+```{r log_monitor,eval= TRUE,cache=TRUE}
 logmonitor <- glm(alerta ~ DMSES.Monitor, data = datos.train, family = "binomial")
 summary(logmonitor)
 
@@ -424,7 +707,7 @@ auc <- performance(pr, measure = "auc")
 
 ### 3.4 Modelo DMSES subscore Regimen
 
-```{r log_regimen,eval= FALSE}
+```{r log_regimen,eval= TRUE,cache=TRUE}
 logregimen <- glm(alerta ~ DMSES.Regimen, data = datos.train, family = "binomial")
 summary(logregimen)
 
@@ -448,7 +731,7 @@ auc <- performance(pr, measure = "auc")
 
 ### 3.5 Modelo DMSES subscore Physical
 
-```{r log_physical,eval= FALSE}
+```{r log_physical,eval= TRUE,cache=TRUE}
 logphysical <- glm(alerta ~ DMSES.Physical, data = datos.train, family = "binomial")
 summary(logphysical)
 
@@ -467,6 +750,173 @@ plot(prf)
 
 auc <- performance(pr, measure = "auc")
 (auc <- auc@y.values[[1]])
+
+```
+
+
+
+## 4. Análisis multivariante de datos
+### 4.1 Análisis de componentes principales
+
+```{r pca_1, eval=TRUE,cache=TRUE}
+pca <- prcomp(datos[,vars_cont],scale. = TRUE)
+summary(pca)
+plot(pca)
+
+pca$rotation[,1:2]
+
+
+al <- as.numeric(datos$alerta)
+MASS::eqscplot(pca$x[,1], pca$x[,2], pch=c(3,21)[al],col=c("blue","red")[al],
+         bg="lightblue",xlab="PC1",ylab="PC2")
+abline(h=0,v=0,lty=4,col="gray")
+legend("topright",pch=c(3,21),col=c("blue","red"), cex=0.8,legend=c("No","Si"))
+title(main="Diabetes mas controlada",line=1)
+
+summary(pca)$importance[ ,1:14]
+
+
+library(factoextra)
+fviz_eig(pca)
+
+fviz_pca_var(pca,col.var = "contrib", 
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE )
+
+
+``` 
+
+El analísis gráfico de componentes principales muestra la contribución de las variables en las dos primeras componentes principales.  
+
+### 4.2 Análisis de conglomerados
+
+```{r clu_1, eval=TRUE, warning= FALSE, eval = TRUE ,cache=TRUE}
+library(cluster)
+
+# Fijamos la semilla aleatoria
+set.seed(123)
+
+df <- scale(datos[,vars_cont])
+
+res.dist <- get_dist(df, method = "euclidean")
+head(round(as.matrix(res.dist), 2))[, 1:5]
+
+# Visualize the dissimilarity matrix
+fviz_dist(res.dist, lab_size = 5)
+
+# Compute hierarchical clustering
+res.hc <- hclust(res.dist, method = "ward.D2")
+
+# Visualize
+plot(res.hc, cex = 0.5)
+
+# Enhanced k-means clustering
+res.km <- eclust(df, "kmeans", nstart = 25, k.max=12)
+
+# Gap statistic plot
+fviz_gap_stat(res.km$gap_stat)
+
+# Silhouette plot
+fviz_silhouette(res.km)
+
+# Optimal number of clusters using gap statistics
+res.km$nbclust
+```
+
+```{r clu_2, eval=TRUE, warning= FALSE, eval = FALSE ,cache=TRUE}
+
+# Enhanced k-means clustering (forzando 11 conglomerados)
+res.km11 <- eclust(df, FUNcluster = "kmeans",  nstart = 25, k = 11)
+
+# Gap statistic plot
+fviz_gap_stat(res.km11$gap_stat)
+
+# Silhouette plot
+fviz_silhouette(res.km11)
+
+``` 
+
+```{r clu_3, eval=TRUE, warning= FALSE, eval = TRUE ,cache=TRUE}
+library(cluster)
+
+# Fijamos la semilla aleatoria
+set.seed(123)
+
+df <- scale(datos[,c("hba1c","DMSES.Diet","age")])
+
+res.dist <- get_dist(df, method = "euclidean")
+head(round(as.matrix(res.dist), 2))[, 1:5]
+
+# Visualize the dissimilarity matrix
+fviz_dist(res.dist, lab_size = 5)
+
+# Compute hierarchical clustering
+res.hc <- hclust(res.dist, method = "ward.D2")
+
+# Visualize
+plot(res.hc, cex = 0.5)
+
+# Enhanced k-means clustering
+res.km <- eclust(df, "kmeans", nstart = 25, k.max=12)
+
+# Gap statistic plot
+fviz_gap_stat(res.km$gap_stat)
+
+# Silhouette plot
+fviz_silhouette(res.km)
+
+# Optimal number of clusters using gap statistics
+res.km$nbclust
+```
+
+
+
+### 4.3 Análisis discriminante
+
+```{r discr_1, eval=TRUE, warning= FALSE, eval = TRUE ,cache=TRUE}
+# Alerta vs Diet
+fit.cv <- lda(alerta ~ DMSES.Diet, data=datos, CV=TRUE)
+# Assess the accuracy of the prediction
+# percent correct for each category of G
+ct <- table(datos$alerta, fit.cv$class)
+diag(prop.table(ct, 1))
+prop.table(ct, 1)
+
+# total percent correct
+sum(diag(prop.table(ct)))
+
+# Alerta vs Diet + age
+fit.cv <- lda(alerta ~ DMSES.Diet + age, data=datos, CV=TRUE)
+# Assess the accuracy of the prediction
+# percent correct for each category of G
+ct <- table(datos$alerta, fit.cv$class)
+diag(prop.table(ct, 1))
+prop.table(ct, 1)
+
+# total percent correct
+sum(diag(prop.table(ct)))
+
+partimat(alerta ~ DMSES.Diet + age, data=datos, method="lda")
+
+# Alerta vs otras variables
+fit.cv <- lda(alerta ~ DMSES.Diet + age + ldl + hdl + trig + bmi, data=datos, CV=TRUE)
+summary(fit.cv)
+# Assess the accuracy of the prediction
+# percent correct for each category of G
+ct <- table(datos$alerta, fit.cv$class)
+diag(prop.table(ct, 1))
+prop.table(ct, 1)
+
+# total percent correct
+sum(diag(prop.table(ct)))
+prop.table(ct)
+
+# Analisis discriminante cuadrático
+datos.qda <- qda(alerta ~ DMSES.Diet + age, data=datos)
+summary(datos.qda)
+clq <- predict(datos.qda, datos[,c("DMSES.Diet","age")])$class
+ct <- table(datos$alerta, clq)
+prop.table(ct)
 
 ```
 
