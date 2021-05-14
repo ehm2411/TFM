@@ -3,10 +3,10 @@ title: "PEC3 TFM UOC"
 author: "Esteban Hernández Maldonado"
 date: "22 de abril de 2021"
 output:
-  html_document:
+  pdf_document:
     toc: yes
     toc_depth: 4
-  pdf_document:
+  html_document:
     toc: yes
     toc_depth: 4
 ---
@@ -512,7 +512,7 @@ ggpairs(datos[,c("DMSES.Diet","DMSES.Monitor","DMSES.Physical","DMSES.Regimen","
 
 Al querer buscar las relaciones entre las puntuaciones del cuestionario DMSES (la puntuación total y la de las partes 'dieta', 'monitor', 'régimen' y 'estado físico') y el nivel de hba1c se observa que no hay una relación lineal a priori. Se valorará hacer transformaciones adecuadas para comprobar si se puede hallar una relación.
 
-```{r explmulti2,eval= FALSE,cache=TRUE}
+```{r explmulti2,eval= TRUE,cache=TRUE}
 par(mfrow=c(2,3))
 pairs(~ hba1c + DMSES.Diet ,data=datos)
 pairs(~ hba1c + DMSES.Monitor,data=datos)
@@ -525,7 +525,7 @@ par(mfrow=c(1,1))
 
 Tampoco se detecta una relación clara entre las puntuaciones del cuestionario DMSES y la variable categórica 'alerta'.
 
-```{r explmulti3,eval= FALSE,cache=TRUE}
+```{r explmulti3,eval= TRUE,cache=TRUE}
 pairs(~ alerta + DMSES.Diet ,data=datos)
 pairs(~ alerta + DMSES.Monitor,data=datos)
 pairs(~ alerta + DMSES.Physical,data=datos)
@@ -790,7 +790,7 @@ El analísis gráfico de componentes principales muestra la contribución de las
 
 ### 4.2 Análisis de conglomerados
 
-```{r clu_1, eval=TRUE, warning= FALSE, eval = TRUE ,cache=TRUE}
+```{r clu_1, eval=TRUE, warning= FALSE ,cache=TRUE}
 library(cluster)
 
 # Fijamos la semilla aleatoria
@@ -823,7 +823,7 @@ fviz_silhouette(res.km)
 res.km$nbclust
 ```
 
-```{r clu_2, eval=TRUE, warning= FALSE, eval = FALSE ,cache=TRUE}
+```{r clu_2, warning= FALSE, eval = FALSE ,cache=TRUE}
 
 # Enhanced k-means clustering (forzando 11 conglomerados)
 res.km11 <- eclust(df, FUNcluster = "kmeans",  nstart = 25, k = 11)
@@ -836,7 +836,7 @@ fviz_silhouette(res.km11)
 
 ``` 
 
-```{r clu_3, eval=TRUE, warning= FALSE, eval = TRUE ,cache=TRUE}
+```{r clu_3, eval=TRUE, warning= FALSE ,cache=TRUE}
 library(cluster)
 
 # Fijamos la semilla aleatoria
@@ -873,7 +873,7 @@ res.km$nbclust
 
 ### 4.3 Análisis discriminante
 
-```{r discr_1, eval=TRUE, warning= FALSE, eval = TRUE ,cache=TRUE}
+```{r discr_1, eval=TRUE, warning= FALSE ,cache=TRUE}
 # Alerta vs Diet
 fit.cv <- lda(alerta ~ DMSES.Diet, data=datos, CV=TRUE)
 # Assess the accuracy of the prediction
