@@ -666,7 +666,33 @@ plot(AIC ~ I(1:15), ylab="AIC", xlab="Number of Predictors")
 
 plot(2:16,rs$adjr2,xlab="No. of Parameters",ylab="Adjusted R-square")
 which.max(rs$adjr2)
+
+
+# datos recientes (suponiendo fecha frecuencia cardiaca es 
+# fecha de realizacion del cuestionario)
+datos.recientes <- datos %>% filter(fecha.hba1c==fecha.bp)
+datos.recientes <- datos.recientes[,var.interes]
+dim(datos.recientes)
+
+b <- regsubsets(alerta~.,data=datos.recientes,nvmax = 15)
+rs <- summary(b)
+rs$which
+
+length(rs$rss)
+length(2:16)
+rs$rss
+
+AIC <- 50*log(rs$rss/50) + (2:16)*2
+dim(AIC)
+plot(AIC ~ I(1:15), ylab="AIC", xlab="Number of Predictors")
+
+plot(2:16,rs$adjr2,xlab="No. of Parameters",ylab="Adjusted R-square")
+which.max(rs$adjr2)
+
 ```
+
+Utilizando datos recientes de la hemoglobina glicosilada no se mejora el R2 ajustado.
+
 ## 3 Regresión logística
 
 El objetivo de este apartado será comprobar si la puntuación del test DMSES (total o de alguno de sus apartados) puede ayudar a discriminar entre pacientes que controlan la diabetes y los que no.
