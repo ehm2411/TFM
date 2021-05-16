@@ -398,7 +398,7 @@ grid.arrange(den_age,den_dmdura,den_hba1c,den_ldl,den_hdl,den_trig,den_sbp,den_d
 
 - Normalidad
 
-Ningun predictor sigue una distribución normal según el test de normalidad de Shapiro y según el QQ plot tenemos normalidad en eda, hdl, sbp, dbp, DMSES.Total y DK.10.
+Ningun predictor sigue una distribución normal según el test de normalidad de Shapiro y según el QQ plot tenemos normalidad en edad, hdl, sbp, dbp, DMSES.Total y DK.10.
 
 
 ```{r expluni_norm,eval=TRUE}
@@ -534,7 +534,7 @@ pairs(~ alerta + DMSES.Total,data=datos)
 ```
 
 
-Análisis multivariante discreto
+Análisis multivariante de las variables discretas
 
 Las variables discretas con poca variabilidad no se toman en cuenta (cva, cereinfrac, ishemic, stroke, cerebhem,tia, angia, chf, cororevas, pad, neuropath )
 
@@ -564,7 +564,26 @@ chisq.test(datos$alerta,datos$sobrepeso)
 chisq.test(datos$alerta,datos$obesidad)
 
 
+# caso gráfico
 
+chisq <- chisq.test(datos$gender,datos$income)
+# Contibution in percentage (%)
+contrib <- 100*chisq$residuals^2/chisq$statistic
+# Visualize the contribution
+corrplot(contrib, is.cor = FALSE)
+
+
+chisq <- chisq.test(datos$gender,datos$alerta)
+# Contibution in percentage (%)
+contrib <- 100*chisq$residuals^2/chisq$statistic
+# Visualize the contribution
+corrplot(contrib, is.cor = FALSE)
+
+chisq <- chisq.test(datos$income,datos$alerta)
+# Contibution in percentage (%)
+contrib <- 100*chisq$residuals^2/chisq$statistic
+# Visualize the contribution
+corrplot(contrib, is.cor = FALSE)
 
 ```
 
@@ -607,6 +626,47 @@ vif(mod)
 par(mfrow=c(1,1))
 ```
 
+```{r lm3,eval= TRUE,cache=TRUE}
+
+datos$dmrx1 <- as.factor(ifelse(datos$dmrx=="Sin medicación",1,0))
+datos$dmrx2 <- as.factor(ifelse(datos$dmrx=="Hipoglicémico oral",1,0))
+datos$dmrx3 <- as.factor(ifelse(datos$dmrx=="Insulina",1,0))
+
+table(datos$obesidad)
+
+
+datos[1:10,c("dmrx","dmrx1","dmrx2","dmrx3")]
+
+var.cat.inf   <- c("alerta","obesidad","sobrepeso","gender","renal","dmrx1","dmrx2","dmrx3","dn","dr")
+var.cont.norm <- c("age", "hdl", "sbp","dbp","DMSES.Total","DK.10")
+var.interes   <- c(var.cat.inf,var.cont.norm)
+var.interes
+datos1 <- datos[,var.interes]
+dim(datos1)
+
+# Fit the full model 
+#full.model <- lm(alerta ~., data = datos1)
+#summary(full.model)
+# Stepwise regression model
+#step.model <- stepAIC(full.model, direction = "both", trace = FALSE)
+#summary(step.model)
+
+require(leaps)
+b <- regsubsets(alerta~.,data=datos1,nvmax = 15)
+rs <- summary(b)
+rs$which
+
+length(rs$rss)
+length(2:16)
+rs$rss
+
+AIC <- 50*log(rs$rss/50) + (2:16)*2
+dim(AIC)
+plot(AIC ~ I(1:15), ylab="AIC", xlab="Number of Predictors")
+
+plot(2:16,rs$adjr2,xlab="No. of Parameters",ylab="Adjusted R-square")
+which.max(rs$adjr2)
+```
 ## 3 Regresión logística
 
 El objetivo de este apartado será comprobar si la puntuación del test DMSES (total o de alguno de sus apartados) puede ayudar a discriminar entre pacientes que controlan la diabetes y los que no.
